@@ -3,6 +3,9 @@
 install.packages("e1071");
 library("e1071");
 
+###########################################################################################################
+###########################  LOADS, CLEAN UP AND PREPARE ORIGINAL DATA   ##################################
+
 # Let's load both classes of data AND CLEAN UNDESIRED INFO
 sanitizedPositives <- read.csv("../data/positive.csv");
 sanitizedNegatives <- read.csv("../data/negative.csv");
@@ -23,54 +26,54 @@ sanitizedNegatives$label = -1; # working with numeric classes appears to be the 
 orderedData <- rbind.data.frame(sanitizedNegatives, sanitizedPositives); # get all data united
 unorderedData <- orderedData[sample(1:nrow(orderedData)), ]; # randomizing the order of data to avoid bad behaviours
 
-# Creates five samples with size equals 10% of original data each to train and one to test
-# this is not the best method because some data can go in more than one resulting dataset but is ok to test
-first_sample <- unorderedData[sample(length(unorderedData),round(0.1 *nrow(unorderedData)),replace = TRUE),];
-second_sample <- unorderedData[sample(length(unorderedData),round(0.1 *nrow(unorderedData)),replace = TRUE),];
-third_sample <- unorderedData[sample(length(unorderedData),round(0.1 *nrow(unorderedData)),replace = TRUE),];
-fourth_sample <- unorderedData[sample(length(unorderedData),round(0.1 *nrow(unorderedData)),replace = TRUE),];
-fifth_sample <- unorderedData[sample(length(unorderedData),round(0.1 *nrow(unorderedData)),replace = TRUE),];
-testSet <- unorderedData[sample(length(unorderedData),round(0.1 *nrow(unorderedData)),replace = TRUE),];
+n <- 575900; # number of rows of each resulting dataset
+dataSetsList <- split(unorderedData, rep(1:ceiling(nrow(unorderedData)/n), each=n, length.out=nrow(unorderedData)));
+#####################################################################################################################
+
 
 # Creates a RBF prediction model based on a sample dataset with default values to cost function, gamma and epsylon
-predictionModel <- svm(label ~ ., data = first_sample, type = "C-classification");
-primaryTest <- predict(predictionModel, testSet[,-9]); # uses all testSet dataset minus the `label` column
+system.time(predictionModel <- e1071::svm(label ~ ., data = dataSet01, type = "C-classification"));
+# saves prediction model in a file to assurance
+##e1071::write.svm(predictionModel, svm.file = "predictionModelBasedOnDataset01.svm", scale.file = "predictionModelBasedOnDataset01.scale");
+save(predictionModel, file = "~/Projetos/FlowSVM/predictionModelBasedOnDataset01.Rda");
+#teste <- load("~/Projetos/FlowSVM/predictionModelBasedOnDataset01.Rda");
 
+datasetList <- list(dataSet02, dataSet03, dataSet04, dataSet05, dataSet06, dataSet07, dataSet08, dataSet09, dataSet10);
+resultList <- list();
+
+for(i in 1:9) {
+  print(paste("Tempo de execução do dataset ", i+1));
+  print(system.time(datasetList[[i]]$predictedAs <- predict(predictionModel, datasetList[[i]][,-9])));
+}
+
+# bigger new train dataset using 90% of original data
+trainDataSet <- rbind.data.frame(datasetList[[1]], datasetList[[2]], datasetList[[3]], datasetList[[4]], datasetList[[5]], datasetList[[6]], datasetList[[7]], datasetList[[8]], datasetList[[9]]);
+trainDataSet$predictedAs <- NULL;
+system.time(biggerPredictionModel <- e1071::svm(label ~ ., data = trainDataSet, type = "C-classification"));
+
+# it was takein more than 130 hours to execute with no hope in make something useful... we need improve it
+print(system.time(dataset10predictedAs <- predict(biggerPredictionModel, datasetList[[10]][,-9])));
+
+# testing prediction with other datasets against the generated model
+result <- predict(predictionModel, dataSetsList[[2]][,-9]); # uses all testSet dataset minus the `label` column
 # Building a new dataset with testSet dataset and add the prediction info as a column
-firstComparedSet <- testSet;
-firstComparedSet$predictedAS <- primaryTest;
+firstComparedSet <- dataSetsList[[2]];
+firstComparedSet$predictedAS <- result;
 # now just compare label column with predict column and count how much is diferent
 # if we get 0, it is same as 100% successful prediction, other value is the number of errors
 sum(ifelse(firstComparedSet$label==firstComparedSet$predictedAS,0,1));
 
-#######################################################################################################
-############################## JUST SAVE DATA TO FILES SECTION #####################################
+# testing prediction with other datasets against the generated model
+result2 <- predict(predictionModel, dataSetsList[[3]][,-9]); # uses all testSet dataset minus the `label` column
 
-save(sanitizedPositives, file=paste("sanitizedPositives.RData"));
-write.csv(sanitizedPositives, file = "sanitizedPositives.csv");
+# Building a new dataset with testSet dataset and add the prediction info as a column
+secondComparedSet <- dataSetsList[[3]];
+secondComparedSet$predictedAS <- result2;
+# now just compare label column with predict column and count how much is diferent
+# if we get 0, it is same as 100% successful prediction, other value is the number of errors
+sum(ifelse(secondComparedSet$label==secondComparedSet$predictedAS,0,1));
 
-save(sanitizedNegatives, file=paste("sanitizedNegatives.RData"));
-write.csv(sanitizedNegatives, file = "sanitizedNegatives.csv");
+# for the next part, we use the tune function to find best C and gamma parameters
+# so we will re-run previous tests to compare results
+tune = tune.svm(predictionModel,dataSetsList[[11]],cost=1:100,gamma=seq(0,0.125,0.5,1))
 
-save(unorderedData, file=paste("unorderedData.RData"));
-write.csv(unorderedData, file = "unorderedData.csv");
-
-save(testSet, file=paste("randomized_sample_testSet.RData"));
-write.csv(testSet, file = "randomized_sample_testSet.csv");
-
-save(first_sample, file=paste("randomized_first_sample.RData"));
-write.csv(first_sample, file = "randomized_first_sample.csv");
-
-save(second_sample, file=paste("randomized_second_sample.RData"));
-write.csv(second_sample, file = "randomized_second_sample.csv");
-
-save(third_sample, file=paste("randomized_third_sample.RData"));
-write.csv(third_sample, file = "randomized_third_sample.csv");
-
-save(fourth_sample, file=paste("randomized_fourth_sample.RData"));
-write.csv(fourth_sample, file = "randomized_fourth_sample.csv");
-
-save(fifth_sample, file=paste("randomized_fifth_sample.RData"));
-write.csv(fifth_sample, file = "randomized_fifth_sample.csv");
-
-#######################################################################################################
